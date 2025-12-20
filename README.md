@@ -59,9 +59,17 @@ pnpm start
 
 1. Create a new Railway project
 2. Deploy from this GitHub repository
-3. Add environment variables in Railway dashboard
-4. Add a volume for database storage (mount path: `/data`)
-5. Set `RAILWAY_VOLUME_MOUNT_PATH=/data` in environment variables
+3. Add environment variables in Railway dashboard:
+   - `XMTP_WALLET_KEY` (required)
+   - `XMTP_DB_ENCRYPTION_KEY` (required)
+   - `XMTP_ENV=production` (required)
+   - `NEXT_PUBLIC_BASE_URL` (required - your Vercel URL)
+   - `RAILWAY_VOLUME_MOUNT_PATH=/data` (optional but recommended)
+4. Add a volume for database storage:
+   - Click "New" → "Volume"
+   - Set mount path: `/data`
+   - This ensures database persists across deployments
+5. The agent will automatically create the database directory if it doesn't exist
 
 ### Other Platforms
 

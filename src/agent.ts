@@ -249,9 +249,36 @@ export async function startXMTPAgent() {
     console.log('📡 Connecting to XMTP network...');
     
     // Support Railway volume storage if available
-    const customDbPath = process.env.RAILWAY_VOLUME_MOUNT_PATH
-      ? (inboxId: string) => `${process.env.RAILWAY_VOLUME_MOUNT_PATH}/${xmtpEnv}-${inboxId.slice(0, 8)}.db3`
-      : undefined;
+    // Ensure the directory exists
+    const fs = await import('fs');
+    const path = await import('path');
+    
+    let customDbPath: ((inboxId: string) => string) | undefined;
+    
+    if (process.env.RAILWAY_VOLUME_MOUNT_PATH) {
+      const dbDir = process.env.RAILWAY_VOLUME_MOUNT_PATH;
+      // Ensure directory exists
+      if (!fs.existsSync(dbDir)) {
+        fs.mkdirSync(dbDir, { recursive: true });
+        console.log(`📁 Created database directory: ${dbDir}`);
+      }
+      customDbPath = (inboxId: string) => {
+        const dbPath = path.join(dbDir, `${xmtpEnv}-${inboxId.slice(0, 8)}.db3`);
+        return dbPath;
+      };
+      console.log(`💾 Using Railway volume storage: ${process.env.RAILWAY_VOLUME_MOUNT_PATH}`);
+    } else {
+      // Use current directory for database
+      const dbDir = process.cwd();
+      if (!fs.existsSync(dbDir)) {
+        fs.mkdirSync(dbDir, { recursive: true });
+      }
+      customDbPath = (inboxId: string) => {
+        const dbPath = path.join(dbDir, `${xmtpEnv}-${inboxId.slice(0, 8)}.db3`);
+        return dbPath;
+      };
+      console.log(`💾 Using local database storage: ${dbDir}`);
+    }
     
     agent = await Agent.createFromEnv({
       env: xmtpEnv,

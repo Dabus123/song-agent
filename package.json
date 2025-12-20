@@ -1,0 +1,35 @@
+{
+  "name": "songcast-xmtp-agent",
+  "version": "1.0.0",
+  "description": "XMTP agent for SongCast that tokenizes Spotify tracks into music coins",
+  "main": "index.ts",
+  "type": "module",
+  "scripts": {
+    "start": "tsx index.ts",
+    "dev": "tsx watch index.ts"
+  },
+  "keywords": [
+    "xmtp",
+    "agent",
+    "spotify",
+    "music",
+    "tokens",
+    "songcast"
+  ],
+  "author": "SongCast",
+  "license": "MIT",
+  "dependencies": {
+    "@xmtp/agent-sdk": "1.2.1",
+    "@x402/next": "2.0.0",
+    "@x402/evm": "2.0.0",
+    "@x402/core": "2.0.0",
+    "axios": "^1.8.4",
+    "dotenv": "^17.2.3",
+    "tsx": "^4.7.0",
+    "viem": "^2.34.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+

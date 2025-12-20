@@ -7,6 +7,8 @@
 
 import { Address } from 'viem';
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
 
 // Parse Spotify track ID from various formats
 function parseSpotifyTrackId(input: string): string | null {
@@ -250,9 +252,6 @@ export async function startXMTPAgent() {
     
     // Support Railway volume storage if available
     // Ensure the directory exists
-    const fs = await import('fs');
-    const path = await import('path');
-    
     let customDbPath: ((inboxId: string) => string) | undefined;
     
     if (process.env.RAILWAY_VOLUME_MOUNT_PATH) {
@@ -264,6 +263,7 @@ export async function startXMTPAgent() {
       }
       customDbPath = (inboxId: string) => {
         const dbPath = path.join(dbDir, `${xmtpEnv}-${inboxId.slice(0, 8)}.db3`);
+        console.log(`💾 Database path: ${dbPath}`);
         return dbPath;
       };
       console.log(`💾 Using Railway volume storage: ${process.env.RAILWAY_VOLUME_MOUNT_PATH}`);
@@ -275,6 +275,7 @@ export async function startXMTPAgent() {
       }
       customDbPath = (inboxId: string) => {
         const dbPath = path.join(dbDir, `${xmtpEnv}-${inboxId.slice(0, 8)}.db3`);
+        console.log(`💾 Database path: ${dbPath}`);
         return dbPath;
       };
       console.log(`💾 Using local database storage: ${dbDir}`);

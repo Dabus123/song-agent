@@ -257,10 +257,23 @@ export async function startXMTPAgent() {
     if (process.env.RAILWAY_VOLUME_MOUNT_PATH) {
       const dbDir = process.env.RAILWAY_VOLUME_MOUNT_PATH;
       // Ensure directory exists
-      if (!fs.existsSync(dbDir)) {
-        fs.mkdirSync(dbDir, { recursive: true });
-        console.log(`📁 Created database directory: ${dbDir}`);
+      try {
+        if (!fs.existsSync(dbDir)) {
+          fs.mkdirSync(dbDir, { recursive: true });
+          console.log(`📁 Created database directory: ${dbDir}`);
+        } else {
+          console.log(`📁 Database directory exists: ${dbDir}`);
+        }
+        // Test write permissions
+        const testFile = path.join(dbDir, '.test');
+        fs.writeFileSync(testFile, 'test');
+        fs.unlinkSync(testFile);
+        console.log(`✅ Database directory is writable: ${dbDir}`);
+      } catch (error: any) {
+        console.error(`❌ Error setting up database directory ${dbDir}:`, error.message);
+        throw new Error(`Cannot access database directory: ${dbDir}. Error: ${error.message}`);
       }
+      
       customDbPath = (inboxId: string) => {
         const dbPath = path.join(dbDir, `${xmtpEnv}-${inboxId.slice(0, 8)}.db3`);
         console.log(`💾 Database path: ${dbPath}`);
@@ -270,9 +283,20 @@ export async function startXMTPAgent() {
     } else {
       // Use current directory for database
       const dbDir = process.cwd();
-      if (!fs.existsSync(dbDir)) {
-        fs.mkdirSync(dbDir, { recursive: true });
+      try {
+        if (!fs.existsSync(dbDir)) {
+          fs.mkdirSync(dbDir, { recursive: true });
+        }
+        // Test write permissions
+        const testFile = path.join(dbDir, '.test');
+        fs.writeFileSync(testFile, 'test');
+        fs.unlinkSync(testFile);
+        console.log(`✅ Database directory is writable: ${dbDir}`);
+      } catch (error: any) {
+        console.error(`❌ Error setting up database directory ${dbDir}:`, error.message);
+        throw new Error(`Cannot access database directory: ${dbDir}. Error: ${error.message}`);
       }
+      
       customDbPath = (inboxId: string) => {
         const dbPath = path.join(dbDir, `${xmtpEnv}-${inboxId.slice(0, 8)}.db3`);
         console.log(`💾 Database path: ${dbPath}`);

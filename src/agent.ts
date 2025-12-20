@@ -288,9 +288,20 @@ export async function startXMTPAgent() {
     console.log('✅ XMTP agent created successfully');
   } catch (error: any) {
     console.error('❌ Failed to create XMTP agent:', error.message);
+    console.error('Full error:', error);
     
     // Provide helpful error messages
-    if (error.message.includes('service is currently unavailable') || error.message.includes('tcp connect error')) {
+    if (error.message.includes('Unable to open the database file') || error.message.includes('database file')) {
+      throw new Error(
+        'Database file error. This could be due to:\n' +
+        '1. Directory permissions issue (check Railway volume mount)\n' +
+        '2. Database directory doesn\'t exist (should be auto-created)\n' +
+        '3. Disk space issue\n\n' +
+        `RAILWAY_VOLUME_MOUNT_PATH: ${process.env.RAILWAY_VOLUME_MOUNT_PATH || 'not set'}\n` +
+        `Current directory: ${process.cwd()}\n` +
+        'Original error: ' + error.message
+      );
+    } else if (error.message.includes('service is currently unavailable') || error.message.includes('tcp connect error')) {
       throw new Error(
         'XMTP service connection failed. This could be due to:\n' +
         '1. Network connectivity issues (check your internet connection)\n' +

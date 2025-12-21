@@ -46,26 +46,41 @@ function parseSpotifyTrackId(input: string): string | null {
 // Extract Spotify URLs from message text
 function extractSpotifyUrls(message: string): string[] {
   const urls: string[] = [];
+  const extractedTrackIds = new Set<string>();
   
-  // Match Spotify URLs
-  const urlRegex = /(?:https?:\/\/)?(?:open\.)?spotify\.com\/track\/([a-zA-Z0-9]+)/g;
+  // Match Spotify URLs (stop at query parameters or end of track ID)
+  // Track IDs are exactly 22 characters, so we match exactly 22 chars after /track/
+  const urlRegex = /(?:https?:\/\/)?(?:open\.)?spotify\.com\/track\/([a-zA-Z0-9]{22})(?:\?|$|\s|"|'|\))/g;
   let match;
   while ((match = urlRegex.exec(message)) !== null) {
-    urls.push(match[0]);
+    const fullUrl = match[0].replace(/[?)\s"'$]+$/, ''); // Remove trailing query params, quotes, etc.
+    const trackId = match[1];
+    urls.push(fullUrl);
+    extractedTrackIds.add(trackId);
   }
   
   // Match spotify:track: URIs
-  const uriRegex = /spotify:track:([a-zA-Z0-9]+)/g;
+  const uriRegex = /spotify:track:([a-zA-Z0-9]{22})(?:\s|$|"|'|\))/g;
   while ((match = uriRegex.exec(message)) !== null) {
-    urls.push(match[0]);
+    const fullUri = match[0].replace(/[\s"'$)]+$/, '');
+    const trackId = match[1];
+    urls.push(fullUri);
+    extractedTrackIds.add(trackId);
   }
   
-  // Match plain track IDs (22 chars)
+  // Match plain track IDs (22 chars) that are NOT part of a URL
+  // We need to check that they're not already extracted from a URL
   const idRegex = /\b([a-zA-Z0-9]{22})\b/g;
   while ((match = idRegex.exec(message)) !== null) {
-    // Check if it looks like a Spotify track ID
-    if (match[1].length === 22) {
-      urls.push(match[1]);
+    const trackId = match[1];
+    // Only add if it's not already extracted from a URL
+    // Also check it's not part of a URL pattern (not preceded by /track/ or :track:)
+    const beforeMatch = message.substring(Math.max(0, match.index - 20), match.index);
+    const isPartOfUrl = /(?:spotify\.com\/track\/|spotify:track:)$/.test(beforeMatch);
+    
+    if (!isPartOfUrl && !extractedTrackIds.has(trackId)) {
+      urls.push(trackId);
+      extractedTrackIds.add(trackId);
     }
   }
   

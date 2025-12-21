@@ -364,65 +364,91 @@ export async function startXMTPAgent() {
                     (ctx.conversation?.context?.conversationId && 
                      ctx.conversation?.context?.conversationId.includes('group'));
     
-    console.log(`📨 Received message from ${senderAddress}${isGroup ? ' (group)' : ' (DM)'}: ${messageContent}`);
+    console.log(`📨 Received message from ${senderAddress || 'unknown'}${isGroup ? ' (group)' : ' (DM)'}: "${messageContent}"`);
 
+    // Clean mentions from messages before processing
+    let cleanContent = messageContent;
+    const wasMentioned = isMentioned(messageContent);
+    
     // In groups: ONLY respond if mentioned
-    // In DMs: Always respond
-    if (isGroup && !isMentioned(messageContent)) {
+    // In DMs: Respond if mentioned OR if there's a Spotify URL
+    if (isGroup && !wasMentioned) {
       console.log('⏭️  Not mentioned in group, skipping');
       return; // Exit early - don't respond
     }
 
-    // Clean mentions from group messages before processing
-    let cleanContent = messageContent;
-    if (isGroup && isMentioned(messageContent)) {
+    // Extract Spotify URLs from original message first to check if we should respond
+    const spotifyUrlsInOriginal = extractSpotifyUrls(messageContent);
+    
+    // In DMs: only respond if mentioned OR if there's a Spotify URL
+    if (!isGroup && !wasMentioned && spotifyUrlsInOriginal.length === 0) {
+      console.log('⏭️  DM without mention or Spotify URL, skipping');
+      return; // Exit early - don't respond
+    }
+
+    // Clean mentions if mentioned
+    if (wasMentioned) {
       // Send reaction to show we're processing
       try {
         await ctx.sendReaction('👀');
       } catch (error) {
         // Reaction might not be supported, continue anyway
-        console.log('Could not send reaction');
+        console.log('⚠️  Could not send reaction');
       }
       cleanContent = removeMention(messageContent);
-      console.log(`👋 Mentioned in group, will respond. Cleaned content: "${cleanContent}"`);
-    } else if (!isGroup) {
-      // Send reaction for DMs too
-      try {
-        await ctx.sendReaction('👀');
-      } catch (error) {
-        console.log('Could not send reaction');
+      if (isGroup) {
+        console.log(`👋 Mentioned in group. Cleaned content: "${cleanContent}"`);
+      } else {
+        console.log(`👋 Mentioned in DM. Cleaned content: "${cleanContent}"`);
       }
-      console.log('💬 DM received, will respond');
     }
 
     // Extract Spotify URLs from cleaned message
     const spotifyUrls = extractSpotifyUrls(cleanContent);
+    console.log(`🔍 Found ${spotifyUrls.length} Spotify URL(s) in message`);
 
+    // If mentioned but no Spotify URL, show help
     if (spotifyUrls.length === 0) {
-      // No Spotify URLs found - send help message
-      const helpMessage = isGroup
-        ? `🎵 Hi! I'm Song, the Music Tokenizer by Songcast.xyz 💽\n\nSend me a Spotify track URL and I'll tokenize it for you!\n\nExamples:\n• https://open.spotify.com/intl-de/track/4gMgiXfqyzZLMhsksGmbQV\n• 4gMgiXfqyzZLMhsksGmbQV\n\nAny format works! Just paste the link or ID 🚀`
-        : `🎵 Hi! I'm Song, the Music Tokenizer by Songcast.xyz 💽 Send me a Spotify track URL and I'll tokenize it for you!\n\nExamples:\n• https://open.spotify.com/intl-de/track/4gMgiXfqyzZLMhsksGmbQV\n• 4gMgiXfqyzZLMhsksGmbQV\n\nAny format works fine! Simply paste the Link or ID here and I'll start creating the song coin! 🚀`;
-      
-      await ctx.sendText(helpMessage);
+      if (wasMentioned) {
+        console.log('💬 Mentioned but no Spotify URL - sending help');
+        const helpMessage = `🎵 Hi! I'm Song, the Music Tokenizer by Songcast.xyz 💽\n\nSend me a Spotify track URL and I'll tokenize it for you!\n\nExamples:\n• https://open.spotify.com/intl-de/track/4gMgiXfqyzZLMhsksGmbQV\n• 4gMgiXfqyzZLMhsksGmbQV\n\nAny format works! Just paste the link or ID 🚀`;
+        await ctx.sendText(helpMessage);
+      } else {
+        console.log('⏭️  No Spotify URL found and not mentioned, skipping response');
+      }
       return;
+    }
+
+    // We have Spotify URLs - send reaction if not already sent (for DMs with URL but no mention)
+    if (!wasMentioned && !isGroup) {
+      try {
+        await ctx.sendReaction('👀');
+      } catch (error) {
+        console.log('⚠️  Could not send reaction');
+      }
+      console.log('💬 DM with Spotify URL - processing');
     }
 
     // Process each Spotify URL
     for (const url of spotifyUrls) {
       try {
+        console.log(`🎵 Processing Spotify URL: ${url}`);
         const trackId = parseSpotifyTrackId(url);
         
         if (!trackId) {
+          console.log(`❌ Could not parse track ID from: ${url}`);
           await ctx.sendText(`❌ Could not parse Spotify track ID from: ${url}`);
           continue;
         }
 
+        console.log(`✅ Extracted track ID: ${trackId}`);
         // Notify user we're processing
         await ctx.sendText(`🎵 Processing Spotify track... Creating your music coin!`);
 
         // Create coin
+        console.log(`🪙 Creating coin for track ${trackId}...`);
         const result = await createCoinFromSpotifyTrack(trackId, walletPrivateKey, baseUrl);
+        console.log(`✅ Coin created: ${result.coinAddress}`);
 
         // Send success message
         const coinUrl = `https://songcast.xyz/coins/${result.coinAddress}`;
@@ -435,7 +461,9 @@ export async function startXMTPAgent() {
         );
 
       } catch (error: any) {
-        console.error(`Error processing Spotify URL ${url}:`, error);
+        console.error(`❌ Error processing Spotify URL ${url}:`, error);
+        console.error(`   Error message: ${error.message}`);
+        console.error(`   Error code: ${error.code || 'N/A'}`);
         
         let errorMessage = 'Failed to create coin';
         if (error.code === 'ECONNREFUSED' || error.message.includes('ECONNREFUSED')) {

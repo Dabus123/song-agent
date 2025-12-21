@@ -37,6 +37,11 @@ NETWORK=base
 
 # Optional - Escrow address for Spotify payouts
 NEXT_PUBLIC_ESCROW_ADDRESS=0x...
+
+# Optional - Mention Detection (for group chat filtering)
+# In groups, agent only responds when mentioned. In DMs, always responds.
+# Defaults: song.base.eth, songcast, song
+MENTION_HANDLES=song.base.eth,songcast,song
 ```
 
 ### 3. Generate Encryption Key

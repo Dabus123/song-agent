@@ -354,23 +354,57 @@ export async function startXMTPAgent() {
 
   // Handle text messages
   agent.on('text', async (ctx: any) => {
-    const message = ctx.message.content;
+    const messageContent = ctx.message.content as string;
     const senderAddress = ctx.message.senderAddress;
+    
+    // Check if this is a group conversation
+    // Try multiple ways to detect group conversations
+    const isGroup = ctx.conversation?.kind === 'group' || 
+                    ctx.conversation?.type === 'group' ||
+                    (ctx.conversation?.context?.conversationId && 
+                     ctx.conversation?.context?.conversationId.includes('group'));
+    
+    console.log(`📨 Received message from ${senderAddress}${isGroup ? ' (group)' : ' (DM)'}: ${messageContent}`);
 
-    console.log(`📨 Received message from ${senderAddress}: ${message}`);
+    // In groups: ONLY respond if mentioned
+    // In DMs: Always respond
+    if (isGroup && !isMentioned(messageContent)) {
+      console.log('⏭️  Not mentioned in group, skipping');
+      return; // Exit early - don't respond
+    }
 
-    // Extract Spotify URLs from message
-    const spotifyUrls = extractSpotifyUrls(message);
+    // Clean mentions from group messages before processing
+    let cleanContent = messageContent;
+    if (isGroup && isMentioned(messageContent)) {
+      // Send reaction to show we're processing
+      try {
+        await ctx.sendReaction('👀');
+      } catch (error) {
+        // Reaction might not be supported, continue anyway
+        console.log('Could not send reaction');
+      }
+      cleanContent = removeMention(messageContent);
+      console.log(`👋 Mentioned in group, will respond. Cleaned content: "${cleanContent}"`);
+    } else if (!isGroup) {
+      // Send reaction for DMs too
+      try {
+        await ctx.sendReaction('👀');
+      } catch (error) {
+        console.log('Could not send reaction');
+      }
+      console.log('💬 DM received, will respond');
+    }
+
+    // Extract Spotify URLs from cleaned message
+    const spotifyUrls = extractSpotifyUrls(cleanContent);
 
     if (spotifyUrls.length === 0) {
       // No Spotify URLs found - send help message
-      await ctx.sendText(
-        `🎵 Hi! I'm Song, the Music Tokenizer by Songcast.xyz 💽 Send me a Spotify track URL and I'll tokenize it for you!\n\n` +
-        `Examples:\n` +
-        `• https://open.spotify.com/intl-de/track/4gMgiXfqyzZLMhsksGmbQV\n` +
-        `• 4gMgiXfqyzZLMhsksGmbQV\n` +
-        `Any format works fine! Simply paste the Link or ID here and I'll start creating the song coin! 🚀`
-      );
+      const helpMessage = isGroup
+        ? `🎵 Hi! I'm Song, the Music Tokenizer by Songcast.xyz 💽\n\nSend me a Spotify track URL and I'll tokenize it for you!\n\nExamples:\n• https://open.spotify.com/intl-de/track/4gMgiXfqyzZLMhsksGmbQV\n• 4gMgiXfqyzZLMhsksGmbQV\n\nAny format works! Just paste the link or ID 🚀`
+        : `🎵 Hi! I'm Song, the Music Tokenizer by Songcast.xyz 💽 Send me a Spotify track URL and I'll tokenize it for you!\n\nExamples:\n• https://open.spotify.com/intl-de/track/4gMgiXfqyzZLMhsksGmbQV\n• 4gMgiXfqyzZLMhsksGmbQV\n\nAny format works fine! Simply paste the Link or ID here and I'll start creating the song coin! 🚀`;
+      
+      await ctx.sendText(helpMessage);
       return;
     }
 

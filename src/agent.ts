@@ -9,6 +9,7 @@ import { Address } from 'viem';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
+import { isMentioned, removeMention } from './utils/mentions.js';
 
 // Parse Spotify track ID from various formats
 function parseSpotifyTrackId(input: string): string | null {

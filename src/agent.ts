@@ -465,6 +465,27 @@ export async function startXMTPAgent() {
         const result = await createCoinFromSpotifyTrack(trackId, walletPrivateKey, baseUrl);
         console.log(`✅ Coin created: ${result.coinAddress}`);
 
+        // Add the newly created coin to the known addresses list
+        try {
+          console.log(`📝 Adding coin to known addresses: ${result.coinAddress}`);
+          const knownCoinsResponse = await axios.post(`${baseUrl}/api/known-coins`, {
+            address: result.coinAddress,
+          }, {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (knownCoinsResponse.data.success) {
+            console.log('✅ Successfully added coin to global known addresses:', result.coinAddress);
+          } else {
+            console.warn('⚠️  Failed to add coin to known addresses:', knownCoinsResponse.data.error || 'Unknown error');
+          }
+        } catch (error: any) {
+          // Non-fatal error - log but don't fail the coin creation
+          console.error('❌ Error adding coin to known addresses:', error.message || error);
+        }
+
         // Send success message
         const coinUrl = `https://songcast.xyz/coins/${result.coinAddress}`;
         await ctx.sendText(

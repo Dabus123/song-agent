@@ -457,6 +457,28 @@ export async function startXMTPAgent() {
         }
 
         console.log(`✅ Extracted track ID: ${trackId}`);
+        
+        // Check if this track has already been coined
+        try {
+          const checkResponse = await axios.get(`${baseUrl}/api/known-spotify-coins`);
+          if (checkResponse.data.success) {
+            const knownTrackIds = checkResponse.data.trackIds || [];
+            const trackIdLower = trackId.toLowerCase();
+            if (knownTrackIds.some((id: string) => id.toLowerCase() === trackIdLower)) {
+              console.log(`⏭️  Track ${trackId} has already been coined, skipping`);
+              await ctx.sendText(
+                `ℹ️ This Spotify track has already been tokenized!\n\n` +
+                `🎵 Track ID: ${trackId}\n` +
+                `💡 Each track can only be coined once. Try a different track!`
+              );
+              continue;
+            }
+          }
+        } catch (error: any) {
+          // Non-fatal - log but continue with coin creation
+          console.warn('⚠️  Could not check known Spotify tracks:', error.message);
+        }
+        
         // Notify user we're processing
         await ctx.sendText(`🎵 Processing Spotify track... Creating your music coin!`);
 
@@ -484,6 +506,27 @@ export async function startXMTPAgent() {
         } catch (error: any) {
           // Non-fatal error - log but don't fail the coin creation
           console.error('❌ Error adding coin to known addresses:', error.message || error);
+        }
+
+        // Add the Spotify track ID to the known Spotify tracks list
+        try {
+          console.log(`📝 Adding Spotify track ID to known tracks: ${trackId}`);
+          const knownSpotifyResponse = await axios.post(`${baseUrl}/api/known-spotify-coins`, {
+            trackId: trackId,
+          }, {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (knownSpotifyResponse.data.success) {
+            console.log('✅ Successfully added Spotify track ID to known tracks:', trackId);
+          } else {
+            console.warn('⚠️  Failed to add Spotify track ID to known tracks:', knownSpotifyResponse.data.error || 'Unknown error');
+          }
+        } catch (error: any) {
+          // Non-fatal error - log but don't fail the coin creation
+          console.error('❌ Error adding Spotify track ID to known tracks:', error.message || error);
         }
 
         // Send success message

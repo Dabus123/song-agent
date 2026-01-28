@@ -437,7 +437,7 @@ export async function startXMTPAgent() {
     // We have Spotify URLs - send reaction if not already sent (for DMs with URL but no mention)
     if (!wasMentioned && !isGroup) {
       try {
-        await ctx.sendReaction('👀');
+        await ctx.sendReaction('💽');
       } catch (error) {
         console.log('⚠️  Could not send reaction');
       }
@@ -506,6 +506,30 @@ export async function startXMTPAgent() {
         } catch (error: any) {
           // Non-fatal error - log but don't fail the coin creation
           console.error('❌ Error adding coin to known addresses:', error.message || error);
+        }
+
+        // Register the newly created coin in the SongCastPoints contract (best-effort)
+        try {
+          console.log(`⛓️  Registering coin in SongCastPoints: ${result.coinAddress}`);
+          const songCastPointsResponse = await axios.post(`${baseUrl}/api/songcast-points/add-coin`, {
+            coinAddress: result.coinAddress,
+          }, {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (songCastPointsResponse.data?.success) {
+            console.log('✅ SongCastPoints registration result:', songCastPointsResponse.data);
+          } else {
+            console.warn(
+              '⚠️  Failed to register coin in SongCastPoints:',
+              songCastPointsResponse.data?.error || 'Unknown error'
+            );
+          }
+        } catch (error: any) {
+          // Non-fatal error - log but don't fail the coin creation
+          console.warn('⚠️  Error registering coin in SongCastPoints:', error.message || error);
         }
 
         // Add the Spotify track ID to the known Spotify tracks list

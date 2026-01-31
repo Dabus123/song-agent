@@ -242,12 +242,16 @@ async function postMintToMoltbook(
   coinUrl: string
 ): Promise<void> {
   const apiKey = process.env.MOLTBOOK_API_KEY;
-  if (!apiKey) return;
+  if (!apiKey) {
+    console.log('📣 Moltbook: skipping post (MOLTBOOK_API_KEY not set)');
+    return;
+  }
 
   const title = `Just minted: ${trackName} by ${artistName}`;
   const content = `New song coin on Base.\n\n${coinUrl}\n\nListen and participate at songcast.xyz`;
 
   try {
+    console.log('📣 Moltbook: posting mint to m/clawrinet...');
     const res = await fetch(`${MOLTBOOK_API_BASE}/posts`, {
       method: 'POST',
       headers: {
@@ -260,11 +264,16 @@ async function postMintToMoltbook(
         content,
       }),
     });
+    const body = (await res.json().catch(() => ({}))) as { error?: string; hint?: string };
     if (res.ok) {
-      console.log('📣 Posted mint to Moltbook (m/clawrinet)');
+      console.log('📣 Moltbook: posted mint to m/clawrinet');
     } else {
-      const err = (await res.json().catch(() => ({}))) as { error?: string };
-      console.warn('⚠️  Moltbook post failed:', err.error || res.statusText, res.status === 429 ? '(rate limit: 1 post / 30 min)' : '');
+      console.warn(
+        `⚠️  Moltbook post failed (${res.status}):`,
+        body.error || body.hint || res.statusText,
+        res.status === 429 ? '— rate limit 1 post / 30 min' : '',
+        res.status === 401 ? '— check API key and that agent is claimed' : ''
+      );
     }
   } catch (error: unknown) {
     console.warn('⚠️  Moltbook post error:', error instanceof Error ? error.message : String(error));
@@ -301,6 +310,7 @@ export async function startXMTPAgent() {
   console.log(`🔧 Using XMTP environment: ${xmtpEnv}`);
   console.log(`🔑 Wallet key present: ${!!process.env.XMTP_WALLET_KEY}`);
   console.log(`🔐 DB encryption key present: ${!!process.env.XMTP_DB_ENCRYPTION_KEY}`);
+  console.log(`📣 Moltbook: ${process.env.MOLTBOOK_API_KEY ? 'API key set — mints will be posted to m/clawrinet' : 'API key not set — mints will not be posted to Moltbook'}`);
 
   // Create agent with error handling
   let agent;

@@ -111,7 +111,7 @@ async function createCoinFromSpotifyTrack(
   trackId: string,
   walletPrivateKey: string,
   baseUrl: string
-): Promise<{ coinAddress: Address; transactionHash: string }> {
+): Promise<{ coinAddress: Address; transactionHash: string; trackName: string; artistName: string }> {
   // Step 1: Fetch track data from Spotify
   const spotifyResponse = await axios.get(`${baseUrl}/api/spotify/track?id=${encodeURIComponent(trackId)}`);
   const track = spotifyResponse.data;
@@ -227,7 +227,48 @@ async function createCoinFromSpotifyTrack(
   return {
     coinAddress: result.coinAddress as Address,
     transactionHash: result.transactionHash,
+    trackName: baseTrackName,
+    artistName: primaryArtistName,
   };
+}
+
+// Post a mint to Moltbook (optional; only if MOLTBOOK_API_KEY is set)
+const MOLTBOOK_API_BASE = 'https://www.moltbook.com/api/v1';
+const MOLTBOOK_SUBMOLT = 'clawrinet';
+
+async function postMintToMoltbook(
+  trackName: string,
+  artistName: string,
+  coinUrl: string
+): Promise<void> {
+  const apiKey = process.env.MOLTBOOK_API_KEY;
+  if (!apiKey) return;
+
+  const title = `Just minted: ${trackName} by ${artistName}`;
+  const content = `New song coin on Base.\n\n${coinUrl}\n\nListen and participate at songcast.xyz`;
+
+  try {
+    const res = await fetch(`${MOLTBOOK_API_BASE}/posts`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        submolt: MOLTBOOK_SUBMOLT,
+        title,
+        content,
+      }),
+    });
+    if (res.ok) {
+      console.log('📣 Posted mint to Moltbook (m/clawrinet)');
+    } else {
+      const err = (await res.json().catch(() => ({}))) as { error?: string };
+      console.warn('⚠️  Moltbook post failed:', err.error || res.statusText, res.status === 429 ? '(rate limit: 1 post / 30 min)' : '');
+    }
+  } catch (error: unknown) {
+    console.warn('⚠️  Moltbook post error:', error instanceof Error ? error.message : String(error));
+  }
 }
 
 // Initialize and start the XMTP agent
@@ -349,6 +390,19 @@ export async function startXMTPAgent() {
         '3. Firewall/proxy blocking the connection\n' +
         '4. Wrong XMTP_ENV setting (try: XMTP_ENV=dev or XMTP_ENV=production)\n\n' +
         `Current XMTP_ENV: ${xmtpEnv}\n` +
+        'Original error: ' + error.message
+      );
+    } else if (error.message.includes('already registered 10/10 installations') || error.message.includes('Please revoke existing installations')) {
+      const inboxIdMatch = error.message.match(/InboxID\s+([a-f0-9]+)/i);
+      const inboxId = inboxIdMatch ? inboxIdMatch[1] : '<your-inbox-id>';
+      throw new Error(
+        'XMTP installation limit reached (10/10). You must revoke some installations before starting the agent.\n\n' +
+        '1. Go to https://xmtp.chat/inbox-tools\n' +
+        '2. Connect with the same wallet used for XMTP_WALLET_KEY, or enter your Inbox ID\n' +
+        `   Inbox ID: ${inboxId}\n` +
+        '3. Revoke enough installations to free a slot (e.g. revoke 9 to keep 1)\n' +
+        '4. Redeploy or restart the agent\n\n' +
+        'To avoid this in future: ensure Railway uses a persistent volume (RAILWAY_VOLUME_MOUNT_PATH) so the same DB is reused and no new installation is created on each deploy.\n\n' +
         'Original error: ' + error.message
       );
     }
@@ -562,6 +616,9 @@ export async function startXMTPAgent() {
           `🔗 View: ${coinUrl}\n` +
           `📊 Transaction: https://basescan.org/tx/${result.transactionHash}`
         );
+
+        // Mirror to Moltbook (optional; set MOLTBOOK_API_KEY to enable)
+        postMintToMoltbook(result.trackName, result.artistName, coinUrl).catch(() => {});
 
       } catch (error: any) {
         console.error(`❌ Error processing Spotify URL ${url}:`, error);

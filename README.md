@@ -106,6 +106,19 @@ SongCast API (Vercel)
     └─→ /api/create-coin-chat
 ```
 
+## Troubleshooting
+
+### "Already registered 10/10 installations"
+
+XMTP allows up to 10 installations per inbox. If you see this error (e.g. on Railway after many deploys or restarts without a persistent DB), you must revoke some installations:
+
+1. Go to **[xmtp.chat/inbox-tools](https://xmtp.chat/inbox-tools)**
+2. Connect with the same wallet as `XMTP_WALLET_KEY`, or paste your Inbox ID (shown in the error message)
+3. Revoke enough installations to free a slot (e.g. revoke 9 to keep 1)
+4. Redeploy or restart the agent
+
+To avoid hitting the limit again, use a **persistent volume** on Railway (`RAILWAY_VOLUME_MOUNT_PATH=/data` and a volume mounted at `/data`) so the same database is reused and no new installation is created on each deploy.
+
 ## Requirements
 
 - Node.js 18+

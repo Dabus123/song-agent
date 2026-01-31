@@ -6,7 +6,12 @@
   "type": "module",
   "scripts": {
     "start": "tsx index.ts",
-    "dev": "tsx watch index.ts"
+    "dev": "tsx watch index.ts",
+    "moltbook:register": "pnpm exec tsx scripts/moltbook-register-agent.ts",
+    "moltbook:create-clawrinet": "pnpm exec tsx scripts/create-clawrinette-submolt.ts",
+    "moltbook:post": "pnpm exec tsx scripts/moltbook-post.ts",
+    "moltbook:update-clawrinet-desc": "pnpm exec tsx scripts/moltbook-update-clawrinet-description.ts",
+    "moltbook:post-disruptive": "pnpm exec tsx scripts/moltbook-post-disruptive.ts"
   },
   "keywords": [
     "xmtp",

@@ -280,6 +280,56 @@ async function postMintToMoltbook(
   }
 }
 
+// Bankr (optional): submit prompt, poll until complete, return response text
+const BANKR_API_BASE = 'https://api.bankr.bot';
+const BANKR_POLL_MS = 2000;
+const BANKR_POLL_MAX_ATTEMPTS = 150; // 5 min
+
+function looksLikeBankrRequest(text: string): boolean {
+  const t = text.toLowerCase().trim();
+  const triggers = [
+    'balance', 'portfolio', 'buy ', 'sell ', 'swap', 'price of', 'price of ', 'polymarket',
+    'eth balance', 'btc ', 'usdc', 'trade', 'transfer', 'send ', 'how much', 'what\'s my',
+    'my balance', 'my portfolio', 'dca', 'limit order', 'stop loss', 'leverage', 'avantis',
+    'nft', 'floor price', 'bet on', 'odds', 'prediction market',
+  ];
+  return triggers.some((w) => t.includes(w));
+}
+
+async function runBankrPrompt(prompt: string): Promise<string> {
+  const apiKey = process.env.BANKR_KEY;
+  if (!apiKey) return 'Bankr is not configured (BANKR_KEY not set).';
+
+  const submitRes = await fetch(`${BANKR_API_BASE}/agent/prompt`, {
+    method: 'POST',
+    headers: {
+      'X-API-Key': apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ prompt: prompt.trim().slice(0, 10000) }),
+  });
+  if (!submitRes.ok) {
+    const err = (await submitRes.json().catch(() => ({}))) as { error?: string };
+    return `Bankr error (${submitRes.status}): ${err.error || submitRes.statusText}. Check your key at bankr.bot/api.`;
+  }
+  const submitData = (await submitRes.json()) as { jobId?: string };
+  const jobId = submitData.jobId;
+  if (!jobId) return 'Bankr did not return a job ID.';
+
+  for (let i = 0; i < BANKR_POLL_MAX_ATTEMPTS; i++) {
+    await new Promise((r) => setTimeout(r, BANKR_POLL_MS));
+    const jobRes = await fetch(`${BANKR_API_BASE}/agent/job/${jobId}`, {
+      headers: { 'X-API-Key': apiKey },
+    });
+    if (!jobRes.ok) return `Bankr job check failed: ${jobRes.status}`;
+    const job = (await jobRes.json()) as { status?: string; response?: string; error?: string };
+    if (job.status === 'completed') return job.response ?? 'Done.';
+    if (job.status === 'failed') return `Bankr failed: ${job.error || 'Unknown error'}.`;
+    if (job.status === 'cancelled') return 'Bankr job was cancelled.';
+  }
+  return 'Bankr timed out (5 min). Try again or check bankr.bot.';
+}
+
 // Initialize and start the XMTP agent
 export async function startXMTPAgent() {
   // Validate environment variables
@@ -311,6 +361,7 @@ export async function startXMTPAgent() {
   console.log(`🔑 Wallet key present: ${!!process.env.XMTP_WALLET_KEY}`);
   console.log(`🔐 DB encryption key present: ${!!process.env.XMTP_DB_ENCRYPTION_KEY}`);
   console.log(`📣 Moltbook: ${process.env.MOLTBOOK_API_KEY ? 'API key set — mints will be posted to m/clawrinet' : 'API key not set — mints will not be posted to Moltbook'}`);
+  console.log(`📺 Bankr: ${process.env.BANKR_KEY ? 'API key set — balance/trade/DeFi requests enabled' : 'API key not set — Bankr disabled'}`);
 
   // Create agent with error handling
   let agent;
@@ -459,9 +510,10 @@ export async function startXMTPAgent() {
     // Extract Spotify URLs from original message first to check if we should respond
     const spotifyUrlsInOriginal = extractSpotifyUrls(messageContent);
     
-    // In DMs: only respond if mentioned OR if there's a Spotify URL
-    if (!isGroup && !wasMentioned && spotifyUrlsInOriginal.length === 0) {
-      console.log('⏭️  DM without mention or Spotify URL, skipping');
+    // In DMs: respond if mentioned, or Spotify URL, or Bankr-style request (when BANKR_KEY set)
+    const isBankrRequest = process.env.BANKR_KEY && looksLikeBankrRequest(messageContent);
+    if (!isGroup && !wasMentioned && spotifyUrlsInOriginal.length === 0 && !isBankrRequest) {
+      console.log('⏭️  DM without mention, Spotify URL, or Bankr request, skipping');
       return; // Exit early - don't respond
     }
 
@@ -486,12 +538,25 @@ export async function startXMTPAgent() {
     const spotifyUrls = extractSpotifyUrls(cleanContent);
     console.log(`🔍 Found ${spotifyUrls.length} Spotify URL(s) in message`);
 
-    // If mentioned but no Spotify URL, show help
+    // If no Spotify URL: try Bankr (when enabled and message looks like Bankr) or show help when mentioned
     if (spotifyUrls.length === 0) {
-      if (wasMentioned) {
-        console.log('💬 Mentioned but no Spotify URL - sending help');
-        const helpMessage = `🎵 Hi! I'm Song, the Music Tokenizer by Songcast.xyz 💽\n\nSend me a Spotify track URL and I'll tokenize it for you!\n\nExamples:\n• https://open.spotify.com/intl-de/track/4gMgiXfqyzZLMhsksGmbQV\n• 4gMgiXfqyzZLMhsksGmbQV\n\nAny format works! Just paste the link or ID 🚀`;
-        await ctx.sendText(helpMessage);
+      if (wasMentioned || isBankrRequest) {
+        if (process.env.BANKR_KEY && looksLikeBankrRequest(cleanContent)) {
+          console.log('📺 Bankr request detected - forwarding to Bankr');
+          try {
+            await ctx.sendText('🔄 Asking Bankr...');
+            const bankrResponse = await runBankrPrompt(cleanContent);
+            await ctx.sendText(bankrResponse);
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.warn('⚠️  Bankr error:', msg);
+            await ctx.sendText(`Bankr error: ${msg}`);
+          }
+        } else {
+          console.log('💬 Mentioned but no Spotify URL - sending help');
+          const helpMessage = `🎵 Hi! I'm Song, the Music Tokenizer by Songcast.xyz 💽\n\nSend me a Spotify track URL and I'll tokenize it for you!\n\nI can also use Bankr for balances, trades, Polymarket, and DeFi (if enabled).\n\nExamples:\n• https://open.spotify.com/track/... or paste track ID\n• "What's my ETH balance?" or "Buy $20 of PEPE on Base"\n\nAny format works! 🚀`;
+          await ctx.sendText(helpMessage);
+        }
       } else {
         console.log('⏭️  No Spotify URL found and not mentioned, skipping response');
       }

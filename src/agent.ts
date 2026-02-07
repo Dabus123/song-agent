@@ -684,12 +684,15 @@ export async function startXMTPAgent() {
 
         // Send success message
         const coinUrl = `https://songcast.xyz/coins/${result.coinAddress}`;
+        const buyPrompt = `@song.base.eth buy me 1$ of this song we just tokenized: ${result.coinAddress}\n`;
         await ctx.sendText(
           `✅ Coin created successfully!\n\n` +
           `🎵 Track: ${trackId}\n` +
           `🪙 Coin Address: ${result.coinAddress}\n` +
           `🔗 View: ${coinUrl}\n` +
-          `📊 Transaction: https://basescan.org/tx/${result.transactionHash}`
+          `📊 Transaction: https://basescan.org/tx/${result.transactionHash}\n\n` +
+          `📋 [Copy promt to buy 1$]\n` +
+          buyPrompt
         );
 
         // Mirror to Moltbook (optional; set MOLTBOOK_API_KEY to enable)

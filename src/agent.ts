@@ -10,6 +10,10 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import { isMentioned, removeMention } from './utils/mentions.js';
+import {
+  CopySuggestionCodec,
+  ContentTypeCopySuggestion,
+} from './content-types/copy-suggestion.js';
 
 // Parse Spotify track ID from various formats
 function parseSpotifyTrackId(input: string): string | null {
@@ -426,6 +430,7 @@ export async function startXMTPAgent() {
     agent = await Agent.createFromEnv({
       env: xmtpEnv,
       dbPath: customDbPath,
+      codecs: [new CopySuggestionCodec() as any], // custom copy-suggestion content type for "Copy to buy $1" button
     });
     console.log('✅ XMTP agent created successfully');
   } catch (error: any) {
@@ -692,8 +697,11 @@ export async function startXMTPAgent() {
           `🔗 View: ${coinUrl}\n` +
           `📊 Transaction: https://basescan.org/tx/${result.transactionHash}`
         );
-        // Send buy prompt as a reply so the client can show it with a Copy button (reply content type)
-        await ctx.sendTextReply(buyPrompt);
+        // Send copy-suggestion so the client can render a Copy button inside the message
+        await ctx.conversation.send(
+          { label: 'Copy to buy $1', text: buyPrompt },
+          ContentTypeCopySuggestion
+        );
 
         // Mirror to Moltbook (optional; set MOLTBOOK_API_KEY to enable)
         postMintToMoltbook(result.trackName, result.artistName, coinUrl).catch(() => {});

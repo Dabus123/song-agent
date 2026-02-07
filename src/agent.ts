@@ -690,10 +690,10 @@ export async function startXMTPAgent() {
           `🎵 Track: ${trackId}\n` +
           `🪙 Coin Address: ${result.coinAddress}\n` +
           `🔗 View: ${coinUrl}\n` +
-          `📊 Transaction: https://basescan.org/tx/${result.transactionHash}\n\n` +
-          `📋 [Copy promt to buy 1$]\n` +
-          buyPrompt
+          `📊 Transaction: https://basescan.org/tx/${result.transactionHash}`
         );
+        // Send buy prompt as a reply so the client can show it with a Copy button (reply content type)
+        await ctx.sendTextReply(buyPrompt);
 
         // Mirror to Moltbook (optional; set MOLTBOOK_API_KEY to enable)
         postMintToMoltbook(result.trackName, result.artistName, coinUrl).catch(() => {});

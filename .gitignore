@@ -10,3 +10,6 @@ build/
 *.tsbuildinfo
 .md
 
+# Clawstrophobia game lives in sibling repo (see clawstrophobia/MOVED.md)
+clawstrophobia/
+
